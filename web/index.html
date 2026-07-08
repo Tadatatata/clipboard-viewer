@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipSync</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f2f3f5;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #5f6b7a;
+      --line: #aeb4bc;
+      --header: #5f9bb7;
+      --add: #76aa83;
+      --accent: #0f766e;
+      --success: #067647;
+      --danger: #b42318;
+      --row-alt: #dddddd;
+      --row-hover: #e9f4f6;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111418;
+        --panel: #171d24;
+        --text: #edf2f7;
+        --muted: #9aa7b4;
+        --line: #3a4450;
+        --header: #315f76;
+        --add: #3f7650;
+        --accent: #2dd4bf;
+        --success: #32d583;
+        --danger: #f97066;
+        --row-alt: #222a33;
+        --row-hover: #23343b;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 Arial, Helvetica, sans-serif;
+    }
+
+    main {
+      width: min(1420px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 16px 0 28px;
+    }
+
+    .title-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 22px;
+      margin-bottom: 58px;
+    }
+
+    .title-row::before,
+    .title-row::after {
+      content: "";
+      height: 1px;
+      background: #c8c8c8;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 36px;
+      letter-spacing: 2px;
+      line-height: 1;
+      color: #1f2937;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      h1 { color: #edf2f7; }
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--panel);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .panel-head {
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .history-head { background: var(--header); }
+    .add-head { background: var(--add); }
+
+    .head-actions,
+    .token-row,
+    .buttons {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .token-row {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel) 92%, var(--line));
+    }
+
+    input,
+    button,
+    .editor {
+      font: inherit;
+    }
+
+    input {
+      min-width: 280px;
+      flex: 1 1 360px;
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: var(--panel);
+      color: var(--text);
+    }
+
+    button {
+      min-height: 34px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #ffffff; }
+
+    .status {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 0 16px 10px;
+    }
+
+    .status.success { color: var(--success); }
+    .status.error { color: var(--danger); }
+
+    .history-wrap {
+      max-height: 48vh;
+      overflow: auto;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    td {
+      border: 1px solid var(--line);
+      padding: 4px 6px;
+      vertical-align: top;
+      background: var(--panel);
+    }
+
+    tr:nth-child(even) td { background: var(--row-alt); }
+    tr:hover td { background: var(--row-hover); }
+    tr.selected td { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+    .time-cell { width: 190px; white-space: nowrap; }
+    .source-cell { width: 110px; white-space: nowrap; color: var(--muted); }
+    .clip-cell { cursor: pointer; }
+
+    .clip-text {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font: 14px/1.35 Consolas, "Liberation Mono", Menlo, monospace;
+    }
+
+    .empty {
+      min-height: 220px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+    }
+
+    .send-body { padding: 10px 12px 14px; }
+
+    .editor {
+      width: 100%;
+      min-height: 120px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      padding: 8px 10px;
+      background: var(--panel);
+      color: var(--text);
+      outline: none;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .editor:empty::before {
+      content: attr(data-placeholder);
+      color: var(--muted);
+    }
+
+    .send-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      color: var(--muted);
+    }
+
+    .meta-line { font-size: 13px; }
+
+    @media (max-width: 760px) {
+      main { width: min(100vw - 16px, 1420px); }
+      .title-row { gap: 12px; margin-bottom: 28px; }
+      h1 { font-size: 28px; }
+      .panel-head,
+      .send-foot { display: block; }
+      .head-actions,
+      .buttons { margin-top: 10px; }
+      input,
+      button { width: 100%; }
+      .time-cell,
+      .source-cell { width: auto; white-space: normal; }
+      table, tbody, tr, td { display: block; width: 100%; }
+      td { border-left: 0; border-right: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="title-row"><h1>CLIPSYNC</h1></div>
+
+    <section class="panel" aria-label="History">
+      <div class="panel-head history-head">
+        <span id="historyTitle">History</span>
+        <div class="head-actions">
+          <button id="refresh">Refresh</button>
+        </div>
+      </div>
+      <div class="token-row">
+        <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="GitHub token, required for sending and recommended for refresh">
+        <button id="saveToken">Save Token</button>
+        <button id="clearToken">Clear</button>
+      </div>
+      <div class="status" id="status">Idle</div>
+      <div class="history-wrap" id="historyWrap">
+        <div class="empty">Set GIST_ID in this file, then run the Python agent on both PCs.</div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Add note">
+      <div class="panel-head add-head"><span>Add Note</span></div>
+      <div class="send-body">
+        <div id="editor" class="editor" contenteditable="true" data-placeholder="Input text here..."></div>
+        <div class="send-foot">
+          <div class="meta-line" id="selectedMeta">Click a history row to copy it.</div>
+          <div class="buttons">
+            <button id="submit" class="primary">Submit</button>
+            <button id="resetText">Reset</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const CONFIG = {
+      gistId: "PUT_YOUR_GIST_ID_HERE",
+      fileName: "clip.json",
+      pollMs: 2000,
+      deviceId: "web"
+    };
+
+    const els = {
+      historyTitle: document.getElementById("historyTitle"),
+      status: document.getElementById("status"),
+      selectedMeta: document.getElementById("selectedMeta"),
+      token: document.getElementById("token"),
+      saveToken: document.getElementById("saveToken"),
+      clearToken: document.getElementById("clearToken"),
+      refresh: document.getElementById("refresh"),
+      editor: document.getElementById("editor"),
+      submit: document.getElementById("submit"),
+      resetText: document.getElementById("resetText"),
+      historyWrap: document.getElementById("historyWrap")
+    };
+
+    const state = {
+      etag: "",
+      document: null,
+      entries: [],
+      selectedEntryId: "",
+      timer: null
+    };
+
+    const tokenKey = `clipboard-relay-token:${CONFIG.gistId}`;
+
+    function setStatus(message, isError = false, isSuccess = false) {
+      els.status.textContent = message;
+      els.status.classList.toggle("error", isError);
+      els.status.classList.toggle("success", isSuccess && !isError);
+    }
+
+    function savedToken() {
+      try {
+        return localStorage.getItem(tokenKey) || "";
+      } catch (error) {
+        setStatus(`Cannot read saved token: ${error.message}`, true);
+        return "";
+      }
+    }
+
+    function saveToken(value) {
+      localStorage.setItem(tokenKey, value);
+      if (localStorage.getItem(tokenKey) !== value) {
+        throw new Error("Browser storage did not keep the token.");
+      }
+    }
+
+    function removeToken() {
+      localStorage.removeItem(tokenKey);
+      if (localStorage.getItem(tokenKey)) {
+        throw new Error("Browser storage did not clear the token.");
+      }
+    }
+
+    function shortToken(value) {
+      if (value.length <= 12) {
+        return "saved";
+      }
+      return `${value.slice(0, 8)}...${value.slice(-4)}`;
+    }
+
+    els.token.value = savedToken();
+
+    function normalizeDocument(raw) {
+      if (!raw) {
+        return { version: 3, updatedAt: "", latest: null, history: [] };
+      }
+      if (Array.isArray(raw.history)) {
+        return {
+          version: raw.version || 3,
+          updatedAt: raw.updatedAt || "",
+          latest: raw.latest || raw.history[raw.history.length - 1] || null,
+          history: raw.history.filter(item => item && typeof item === "object")
+        };
+      }
+      if (raw.entryId || raw.text || raw.html) {
+        return { version: 3, updatedAt: raw.updatedAt || "", latest: raw, history: [raw] };
+      }
+      return { version: 3, updatedAt: "", latest: null, history: [] };
+    }
+
+    function entryKey(entry) {
+      return entry.entryId || entry.hash || `${entry.updatedAt || ""}:${entry.source || ""}:${entry.text || ""}`;
+    }
+
+    function selectedEntry() {
+      if (!state.entries.length) {
+        return null;
+      }
+      return state.entries.find(entry => entryKey(entry) === state.selectedEntryId) || state.entries[state.entries.length - 1];
+    }
+
+    function formatTime(value) {
+      if (!value) {
+        return "";
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return value;
+      }
+      const pad = number => String(number).padStart(2, "0");
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
+    function displayText(entry) {
+      const text = entry.text || "";
+      if (text) {
+        return text;
+      }
+      if (entry.html) {
+        const div = document.createElement("div");
+        div.innerHTML = entry.html;
+        return div.textContent || entry.html;
+      }
+      return "";
+    }
+
+    function htmlFromEditor() {
+      const html = els.editor.innerHTML.trim();
+      if (!html || html === "<br>") {
+        return "";
+      }
+      return html;
+    }
+
+    function textFromEditor() {
+      return els.editor.innerText.replace(/\n$/, "");
+    }
+
+    function render() {
+      state.entries = (state.document && state.document.history ? state.document.history : []).filter(Boolean);
+      els.historyTitle.textContent = `History${state.entries.length ? ` - ${state.entries.length}` : ""}`;
+
+      if (!state.entries.length) {
+        els.historyWrap.innerHTML = '<div class="empty">No clipboard history yet.</div>';
+        els.selectedMeta.textContent = "Click a history row to copy it.";
+        return;
+      }
+
+      if (!state.selectedEntryId || !state.entries.some(entry => entryKey(entry) === state.selectedEntryId)) {
+        state.selectedEntryId = entryKey(state.entries[state.entries.length - 1]);
+      }
+
+      const table = document.createElement("table");
+      const tbody = document.createElement("tbody");
+      const ordered = [...state.entries].reverse();
+
+      for (const entry of ordered) {
+        const key = entryKey(entry);
+        const tr = document.createElement("tr");
+        tr.className = key === state.selectedEntryId ? "selected" : "";
+        tr.tabIndex = 0;
+        tr.addEventListener("click", () => {
+          state.selectedEntryId = key;
+          render();
+          copyEntry(entry).catch(error => setStatus(error.message, true));
+        });
+
+        const timeTd = document.createElement("td");
+        timeTd.className = "time-cell";
+        timeTd.textContent = formatTime(entry.updatedAt);
+
+        const sourceTd = document.createElement("td");
+        sourceTd.className = "source-cell";
+        sourceTd.textContent = entry.source || "unknown";
+
+        const clipTd = document.createElement("td");
+        clipTd.className = "clip-cell";
+        const pre = document.createElement("pre");
+        pre.className = "clip-text";
+        pre.textContent = displayText(entry);
+        clipTd.appendChild(pre);
+
+        tr.append(timeTd, sourceTd, clipTd);
+        tbody.appendChild(tr);
+      }
+
+      table.appendChild(tbody);
+      els.historyWrap.replaceChildren(table);
+
+      const selected = selectedEntry();
+      els.selectedMeta.textContent = selected
+        ? `Selected: ${formatTime(selected.updatedAt)} / ${selected.source || "unknown"}`
+        : "Click a history row to copy it.";
+    }
+
+    async function readGist() {
+      if (!CONFIG.gistId || CONFIG.gistId === "PUT_YOUR_GIST_ID_HERE") {
+        const token = savedToken();
+        setStatus(
+          token
+            ? "Token is saved locally, but CONFIG.gistId still needs to be set in index.html."
+            : "Set CONFIG.gistId in index.html",
+          true
+        );
+        return;
+      }
+
+      const headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      };
+      const token = savedToken();
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      if (state.etag) {
+        headers["If-None-Match"] = state.etag;
+      }
+
+      const res = await fetch(`https://api.github.com/gists/${CONFIG.gistId}`, { headers, cache: "no-store" });
+      if (res.status === 304) {
+        setStatus("No change; token is saved locally", false, true);
+        return;
+      }
+
+      const remaining = res.headers.get("x-ratelimit-remaining");
+      state.etag = res.headers.get("etag") || state.etag;
+      if (!res.ok) {
+        throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
+      }
+
+      const data = await res.json();
+      const file = data.files && data.files[CONFIG.fileName];
+      if (!file) {
+        throw new Error(`Gist file not found: ${CONFIG.fileName}`);
+      }
+
+      let raw = file.content;
+      if (file.truncated && file.raw_url) {
+        const rawRes = await fetch(`${file.raw_url}?t=${Date.now()}`, { cache: "no-store" });
+        if (!rawRes.ok) {
+          throw new Error(`Raw file ${rawRes.status}: ${await rawRes.text()}`);
+        }
+        raw = await rawRes.text();
+      }
+
+      state.document = normalizeDocument(JSON.parse(raw));
+      setStatus(remaining ? `Live / API remaining ${remaining}` : "Live", false, true);
+      render();
+    }
+
+    async function sha256(value) {
+      const bytes = new TextEncoder().encode(value);
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
+    }
+
+    async function writeGist(text, html) {
+      const token = savedToken();
+      if (!token) {
+        throw new Error("Save a GitHub token before sending.");
+      }
+      if (!CONFIG.gistId || CONFIG.gistId === "PUT_YOUR_GIST_ID_HERE") {
+        throw new Error("Set CONFIG.gistId in index.html.");
+      }
+      if (!text && !html) {
+        throw new Error("Nothing to submit.");
+      }
+
+      const entry = {
+        version: 3,
+        entryId: crypto.randomUUID(),
+        updatedAt: new Date().toISOString(),
+        source: CONFIG.deviceId,
+        kind: html ? "html" : "text",
+        text,
+        html: html || null,
+        hash: await sha256(`${text}\n---html---\n${html || ""}`)
+      };
+
+      state.etag = "";
+      await readGist();
+      const current = normalizeDocument(state.document);
+      const history = current.history.filter(item => entryKey(item) !== entry.entryId);
+      history.push(entry);
+      const documentPayload = {
+        version: 3,
+        updatedAt: entry.updatedAt,
+        latest: entry,
+        history
+      };
+
+      const body = JSON.stringify({
+        files: {
+          [CONFIG.fileName]: {
+            content: JSON.stringify(documentPayload)
+          }
+        }
+      });
+
+      const res = await fetch(`https://api.github.com/gists/${CONFIG.gistId}`, {
+        method: "PATCH",
+        headers: {
+          "Accept": "application/vnd.github+json",
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json; charset=utf-8",
+          "X-GitHub-Api-Version": "2022-11-28"
+        },
+        body
+      });
+
+      if (!res.ok) {
+        throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
+      }
+
+      state.etag = "";
+      state.document = documentPayload;
+      state.selectedEntryId = entry.entryId;
+      render();
+      setStatus("Submitted");
+    }
+
+    async function refresh(savedAction = "") {
+      try {
+        await readGist();
+      } catch (error) {
+        setStatus(savedAction ? `${savedAction}, but refresh failed: ${error.message}` : error.message, true);
+      }
+    }
+
+    async function copyEntry(entry) {
+      const text = entry.text || displayText(entry);
+      if (entry.html && window.ClipboardItem && navigator.clipboard.write) {
+        try {
+          const item = new ClipboardItem({
+            "text/html": new Blob([entry.html], { type: "text/html" }),
+            "text/plain": new Blob([text], { type: "text/plain" })
+          });
+          await navigator.clipboard.write([item]);
+          setStatus("Copied rich text");
+          return;
+        } catch (error) {
+          await navigator.clipboard.writeText(text);
+          setStatus("Copied plain text; rich copy failed");
+          return;
+        }
+      }
+      await navigator.clipboard.writeText(text);
+      setStatus("Copied plain text");
+    }
+
+    els.saveToken.addEventListener("click", async () => {
+      const token = els.token.value.trim();
+      if (!token) {
+        setStatus("Token input is empty; nothing was saved.", true);
+        return;
+      }
+
+      try {
+        saveToken(token);
+        state.etag = "";
+        setStatus(`Token ${shortToken(token)} saved locally. Checking Gist...`, false, true);
+        await refresh("Token saved locally");
+      } catch (error) {
+        setStatus(`Token save failed: ${error.message}`, true);
+      }
+    });
+
+    els.clearToken.addEventListener("click", async () => {
+      try {
+        removeToken();
+        els.token.value = "";
+        state.etag = "";
+        setStatus("Token cleared from this browser. Refreshing without token...", false, true);
+        await refresh("Token cleared locally");
+      } catch (error) {
+        setStatus(`Token clear failed: ${error.message}`, true);
+      }
+    });
+
+    els.refresh.addEventListener("click", refresh);
+    els.submit.addEventListener("click", () => {
+      const text = textFromEditor();
+      const html = htmlFromEditor();
+      writeGist(text, html).catch(error => setStatus(error.message, true));
+    });
+    els.resetText.addEventListener("click", () => {
+      els.editor.innerHTML = "";
+    });
+
+    refresh();
+    state.timer = window.setInterval(refresh, CONFIG.pollMs);
+  </script>
+</body>
+</html>
