@@ -491,6 +491,13 @@
       return els.editor.innerText.replace(/\n$/, "");
     }
 
+    function clearEditor() {
+      els.editor.replaceChildren();
+      els.editor.textContent = "";
+      els.editor.innerHTML = "";
+      els.editor.focus();
+    }
+
     async function githubErrorMessage(res, action) {
       const raw = await res.text();
       let detail = raw.trim();
@@ -701,7 +708,6 @@
       state.etag = "";
       state.document = documentPayload;
       state.selectedEntryId = entry.entryId;
-      els.editor.innerHTML = "";
       render();
       setStatus("Submitted");
     }
@@ -766,13 +772,18 @@
     });
 
     els.refresh.addEventListener("click", () => refresh());
-    els.submit.addEventListener("click", () => {
+    els.submit.addEventListener("click", async () => {
       const text = textFromEditor();
       const html = htmlFromEditor();
-      writeGist(text, html).catch(error => setStatus(error.message, true));
+      try {
+        await writeGist(text, html);
+        clearEditor();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
     });
     els.resetText.addEventListener("click", () => {
-      els.editor.innerHTML = "";
+      clearEditor();
     });
 
     refresh();
