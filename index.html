@@ -18,6 +18,9 @@
       --success: #067647;
       --danger: #b42318;
       --danger-bg: #fff1f0;
+      --copied: #1d4ed8;
+      --copied-text: #ffffff;
+      --manual-border: #111827;
       --row-alt: #dddddd;
       --row-hover: #e9f4f6;
     }
@@ -35,6 +38,9 @@
         --success: #32d583;
         --danger: #f97066;
         --danger-bg: #3a1f1f;
+        --copied: #2563eb;
+        --copied-text: #ffffff;
+        --manual-border: #f9fafb;
         --row-alt: #222a33;
         --row-hover: #23343b;
       }
@@ -205,7 +211,17 @@
 
     tr:nth-child(even) td { background: var(--row-alt); }
     tr:hover td { background: var(--row-hover); }
-    tr.selected td { outline: 2px solid var(--accent); outline-offset: -2px; }
+    tr.copied td {
+      background: var(--copied) !important;
+      color: var(--copied-text);
+    }
+    tr.copied .source-cell { color: var(--copied-text); }
+    tr.manual td {
+      border-top: 2px solid var(--manual-border);
+      border-bottom: 2px solid var(--manual-border);
+    }
+    tr.manual td:first-child { border-left: 2px solid var(--manual-border); }
+    tr.manual td:last-child { border-right: 2px solid var(--manual-border); }
 
     .time-cell { width: 190px; white-space: nowrap; }
     .source-cell {
@@ -357,11 +373,13 @@
       etag: "",
       document: null,
       entries: [],
-      selectedEntryId: "",
+      copiedEntryId: "",
+      manualEntryId: "",
       timer: null
     };
 
     const tokenKey = `clipboard-relay-token:${CONFIG.gistId}`;
+    const senderKey = `clipboard-relay-sender:${CONFIG.gistId}`;
 
     function setStatus(message, isError = false, isSuccess = false) {
       els.status.textContent = message;
@@ -375,9 +393,12 @@
         return "";
       }
 
-      const assignment = normalized.match(/^(GITHUB_TOKEN|CLIPBOARD_RELAY_GITHUB_TOKEN)\s*=\s*(.+)$/i);
-      if (assignment) {
-        normalized = assignment[2].trim();
+      const tokenLine = normalized
+        .split(/\r?\n/)
+        .map((line) => line.match(/^(GITHUB_TOKEN|CLIPBOARD_RELAY_GITHUB_TOKEN)\s*=\s*(.+)$/i))
+        .find(Boolean);
+      if (tokenLine) {
+        normalized = tokenLine[2].trim();
       }
       if (normalized.toLowerCase().startsWith("bearer ")) {
         normalized = normalized.slice(7).trim();
@@ -425,6 +446,42 @@
 
     els.token.value = savedToken();
 
+    function normalizeSender(value) {
+      return value.trim().replace(/\s+/g, "_");
+    }
+
+    function savedSender() {
+      try {
+        return localStorage.getItem(senderKey) || "";
+      } catch (error) {
+        setStatus(`Cannot read saved sender: ${error.message}`, true);
+        return "";
+      }
+    }
+
+    function saveSender(value) {
+      const normalized = normalizeSender(value);
+      if (normalized) {
+        localStorage.setItem(senderKey, normalized);
+      }
+      return normalized;
+    }
+
+    function applySenderFromUrl() {
+      const url = new URL(window.location.href);
+      const sender = normalizeSender(url.searchParams.get("sender") || url.searchParams.get("device") || "");
+      if (!sender) {
+        return "";
+      }
+      localStorage.setItem(senderKey, sender);
+      url.searchParams.delete("sender");
+      url.searchParams.delete("device");
+      window.history.replaceState({}, document.title, url.toString());
+      return sender;
+    }
+
+    const registeredSender = applySenderFromUrl();
+
     function normalizeDocument(raw) {
       if (!raw) {
         return { version: 3, updatedAt: "", latest: null, history: [] };
@@ -451,7 +508,8 @@
       if (!state.entries.length) {
         return null;
       }
-      return state.entries.find(entry => entryKey(entry) === state.selectedEntryId) || state.entries[state.entries.length - 1];
+      const selectedKey = state.copiedEntryId || state.manualEntryId;
+      return state.entries.find(entry => entryKey(entry) === selectedKey) || null;
     }
 
     function formatTime(value) {
@@ -537,8 +595,11 @@
         return;
       }
 
-      if (!state.selectedEntryId || !state.entries.some(entry => entryKey(entry) === state.selectedEntryId)) {
-        state.selectedEntryId = entryKey(state.entries[state.entries.length - 1]);
+      if (state.copiedEntryId && !state.entries.some(entry => entryKey(entry) === state.copiedEntryId)) {
+        state.copiedEntryId = "";
+      }
+      if (state.manualEntryId && !state.entries.some(entry => entryKey(entry) === state.manualEntryId)) {
+        state.manualEntryId = "";
       }
 
       const table = document.createElement("table");
@@ -548,10 +609,21 @@
       for (const entry of ordered) {
         const key = entryKey(entry);
         const tr = document.createElement("tr");
-        tr.className = key === state.selectedEntryId ? "selected" : "";
+        tr.className = key === state.copiedEntryId ? "copied" : key === state.manualEntryId ? "manual" : "";
         tr.tabIndex = 0;
         tr.addEventListener("click", () => {
-          state.selectedEntryId = key;
+          if (state.copiedEntryId === key) {
+            state.copiedEntryId = "";
+            state.manualEntryId = key;
+            render();
+            setStatus("Manual selection mode. Select text, then right-click Copy.");
+            return;
+          }
+          if (state.manualEntryId === key) {
+            return;
+          }
+          state.copiedEntryId = key;
+          state.manualEntryId = "";
           render();
           copyEntry(entry).catch(error => setStatus(error.message, true));
         });
@@ -581,7 +653,9 @@
 
       const selected = selectedEntry();
       els.selectedMeta.textContent = selected
-        ? `Selected: ${formatTime(selected.updatedAt)} / ${selected.source || "unknown"}`
+        ? state.copiedEntryId
+          ? `Copied: ${formatTime(selected.updatedAt)} / ${selected.source || "unknown"}`
+          : `Manual select: ${formatTime(selected.updatedAt)} / ${selected.source || "unknown"}`
         : "Click a history row to copy it.";
     }
 
@@ -658,12 +732,16 @@
       if (!text && !html) {
         throw new Error("Nothing to submit.");
       }
+      const sender = savedSender();
+      if (!sender) {
+        throw new Error("Sender is not registered. Start clipboard_relay.py once, then reopen this page.");
+      }
 
       const entry = {
         version: 3,
         entryId: crypto.randomUUID(),
         updatedAt: new Date().toISOString(),
-        source: CONFIG.deviceId,
+        source: sender,
         kind: html ? "html" : "text",
         text,
         html: html || null,
@@ -707,7 +785,8 @@
 
       state.etag = "";
       state.document = documentPayload;
-      state.selectedEntryId = entry.entryId;
+      state.copiedEntryId = "";
+      state.manualEntryId = "";
       render();
       setStatus("Submitted");
     }
@@ -785,6 +864,10 @@
     els.resetText.addEventListener("click", () => {
       clearEditor();
     });
+
+    if (registeredSender) {
+      setStatus(`Sender registered: ${registeredSender}`, false, true);
+    }
 
     refresh();
     state.timer = window.setInterval(refresh, CONFIG.pollMs);
